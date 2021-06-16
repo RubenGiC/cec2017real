@@ -434,6 +434,117 @@ double Cells(vector<vector<double>> celulas, int dim, int max_eval, int seed){
 	return best_f;
 }
 
+double CellsWithBL(vector<vector<double>> celulas, int dim, int max_eval, int seed){
+	
+	double best_f=-1, f=-1;
+	vector<double> queen_cell;
+	vector<pair<double,vector<double>>> cells1;
+	vector<pair<double,vector<double>>> cells2;
+
+	int eval=0, grupo = -1;
+
+	int max_size = 0;
+
+	int decrece = 0, decrece2 = 0;
+	int constant_meiosis = 4;
+
+	vector<int> indice(dim);
+
+	for(int i=0; i < dim; ++i)
+		indice[i]=i;
+	
+	//creamos los 2 grupos de celulas
+	for(unsigned int i=0; i < celulas.size(); i+=2){
+
+		cells1.push_back(pair<double,vector<double>>(cec17_fitness(&celulas[i][0]),celulas[i]));
+		cells2.push_back(pair<double,vector<double>>(cec17_fitness(&celulas[i][0]),celulas[i+1]));
+		eval +=2;
+	}
+
+	while(eval < max_eval){
+
+		//aplicamos la explotación
+		cells1 = bl(cells1, dim, eval, max_eval);
+		cells2 = bl(cells2, dim, eval, max_eval);
+
+		//calculamos el tamaño maximo de los 2 grupos para ahorrar iteraciones inecesarias
+		max_size=cells1.size();
+		if(cells2.size() > max_size)
+			max_size=cells2.size();
+
+		//guardamos el que tenga mejor fitness
+		for(unsigned int i=0; i<max_size; ++i){
+
+			//para el grupo 1 de celulas
+			if(i < cells1.size()){
+				if(cells1[i].first < best_f || best_f==-1){
+					best_f = cells1[i].first;
+					queen_cell = cells1[i].second;
+					grupo = 1;
+				}
+			}
+			//para el grupo 2 de celulas
+			if(i < cells2.size()){
+				if(cells2[i].first < best_f || best_f==-1){
+					best_f = cells2[i].first;
+					queen_cell = cells2[i].second;
+					grupo = 2;
+				}
+			}
+		}
+		//Propagación o reproducción
+		//cells1 = Meiosis(cells1, eval, max_eval, indice, dim, decrece2, constant_meiosis);
+		cells1 = Mitosis(cells1, eval, max_eval, indice, dim, decrece, seed);
+		cells2 = Meiosis(cells2, eval, max_eval, indice, dim, decrece2, constant_meiosis, seed);
+
+		//controlo que la constante este entre 4 y 2
+		if(decrece2==0){
+			--constant_meiosis;
+		}else{
+			++constant_meiosis;
+		}
+
+		//controlo que los rangos en la Meiosis este entre [5 y 120]
+		if(constant_meiosis == 1){
+			decrece2 = 1;
+			++constant_meiosis;
+		}
+		else if(constant_meiosis == 5){
+			decrece2 = 0;
+			--constant_meiosis;
+		}
+
+		//controlo que los rangos en la Mitosis este entre [10 y 160]
+		if(cells1.size() >= 160)
+			decrece = 1;
+		else if(cells1.size() <= 10)
+			decrece = 0;
+
+		//guardamos el que tenga mejor fitness
+		for(unsigned int i=0; i<max_size; ++i){
+
+			if(i < cells1.size()){
+				if(cells1[i].first < best_f || best_f==-1){
+					best_f = cells1[i].first;
+					queen_cell = cells1[i].second;
+					grupo = 1;
+				}
+			}
+
+			if(i < cells2.size()){
+				if(cells2[i].first < best_f || best_f==-1){
+					best_f = cells2[i].first;
+					queen_cell = cells2[i].second;
+					grupo = 2;
+				}
+			}
+		}
+
+	}
+
+	return best_f;
+}
+
 
 int main() {
 
@@ -511,7 +622,7 @@ int main() {
 	clock_t end = clock();
 	float elapsed = float(end - start)/CLOCKS_PER_SEC;
 
-	cout << "En total tarda: " << (elapsed/120.0) << " (horas)" << endl;
+	cout << "En total tarda: " << (elapsed/60.0) << " (minutos)" << endl;
 
 	return 0;
 }
