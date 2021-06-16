@@ -104,10 +104,9 @@ vector<pair<double, vector<double>>> explotacion(vector<pair<double, vector<doub
 	return actual_cells;
 }
 
-vector<pair<double, vector<double>>> Meiosis(vector<pair<double, vector<double>>> cells, int &eval, int max_eval, vector<int> indice, int dim, int decrece, int n_cells){
+vector<pair<double, vector<double>>> Meiosis(vector<pair<double, vector<double>>> cells, int &eval, int max_eval, vector<int> indice, int dim, int decrece, int n_cells, int seed){
 
 	//para los valores aleatorios
-	int seed = 42;
 	uniform_real_distribution<> dis(-100.0, 100.0);
 	mt19937 gen(seed);
 
@@ -129,7 +128,7 @@ vector<pair<double, vector<double>>> Meiosis(vector<pair<double, vector<double>>
 
 	//contador de celulas creadas por cada pareja
 	int count=0;
-	//numero maximo de celulas por pareja
+	//calculamos el numero maximo de nodos por fragmento
 	int max = ceil((float)dim/4);
 
 	//creamos el vector de indices para seleccionar los fragmentos aleatorios
@@ -255,10 +254,9 @@ vector<pair<double, vector<double>>> Meiosis(vector<pair<double, vector<double>>
 }
 
 
-vector<pair<double, vector<double>>> Mitosis(vector<pair<double, vector<double>>> cells, int &eval, int max_eval, vector<int> indice, int dim, int decrece){
+vector<pair<double, vector<double>>> Mitosis(vector<pair<double, vector<double>>> cells, int &eval, int max_eval, vector<int> indice, int dim, int decrece, int seed){
 	
 	//para los valores aleatorios
-	int seed = 42;
 	uniform_real_distribution<> dis(-100.0, 100.0);
 	mt19937 gen(seed);
 
@@ -325,7 +323,7 @@ vector<pair<double, vector<double>>> Mitosis(vector<pair<double, vector<double>>
 	return new_cells;
 }
 
-double Cells(vector<vector<double>> celulas, int dim, int max_eval){
+double Cells(vector<vector<double>> celulas, int dim, int max_eval, int seed){
 	
 	double best_f=-1, f=-1;
 	vector<double> queen_cell;
@@ -385,8 +383,8 @@ double Cells(vector<vector<double>> celulas, int dim, int max_eval){
 		}
 		//Propagación o reproducción
 		//cells1 = Meiosis(cells1, eval, max_eval, indice, dim, decrece2, constant_meiosis);
-		cells1 = Mitosis(cells1, eval, max_eval, indice, dim, decrece);
-		cells2 = Meiosis(cells2, eval, max_eval, indice, dim, decrece2, constant_meiosis);
+		cells1 = Mitosis(cells1, eval, max_eval, indice, dim, decrece, seed);
+		cells2 = Meiosis(cells2, eval, max_eval, indice, dim, decrece2, constant_meiosis, seed);
 
 		//controlo que la constante este entre 4 y 2
 		if(decrece2==0){
@@ -440,14 +438,20 @@ double Cells(vector<vector<double>> celulas, int dim, int max_eval){
 int main() {
 
 	//int dim = 10;
-	int seed = 42;
+	vector<int> seed(10);
+	seed.push_back(42);
+	seed.push_back(5);
+	seed.push_back(100);
+	seed.push_back(-1);
+	seed.push_back(50);
+	seed.push_back(1995);
+	seed.push_back(19);
+	seed.push_back(21);
+	seed.push_back(80);
+	seed.push_back(7);
 	
 	double fitness;
 	double fitness_best=-1;
-
-	uniform_real_distribution<> dis(-100.0, 100.0);
-
-	mt19937 gen(seed);
 
 	vector<vector<double>> solutions;
 
@@ -471,6 +475,10 @@ int main() {
 			//repite el problema 10 veces
 			for(int k=0; k<10; ++k){
 
+				uniform_real_distribution<> dis(-100.0, 100.0);
+
+				mt19937 gen(seed[k]);
+
 				cec17_init("cells", j+1, dim);
 
 				for(int e = 0; e < 10; ++e){
@@ -483,7 +491,7 @@ int main() {
 					
 				}
 
-				f += Cells(solutions, dim, 10000*dim);//10000*dim
+				f += Cells(solutions, dim, 10000*dim, seed[k]);//10000*dim
 
 				for(unsigned int i =0; i < solutions.size(); ++i)
 					solutions[i].clear();
@@ -495,15 +503,15 @@ int main() {
 			f =0;
 		}
 		end_part = clock();
-		elapsed_part = float(end - start)/CLOCKS_PER_SEC;
+		elapsed_part = float(end_part - start_part)/CLOCKS_PER_SEC;
 
-		cout << "Elapse con dimensión (" << dim << "): " << elapsed_part << endl;
+		cout << "Elapse con dimensión (" << dim << "): " << (elapsed_part/60.0) << " (minutos)" << endl;
 
 	}
 	clock_t end = clock();
 	float elapsed = float(end - start)/CLOCKS_PER_SEC;
 
-	cout << "En total tarda: " << elapsed << " (segundos)" << endl;
+	cout << "En total tarda: " << (elapsed/120.0) << " (horas)" << endl;
 
 	return 0;
 }
