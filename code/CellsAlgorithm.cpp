@@ -23,6 +23,108 @@ extern "C"{
 
 using namespace std;
 
+//algoritmo Solis-Wet
+void clip(vector<double> &sol, int lower, int upper) {
+  for (auto &val : sol) {
+    if (val < lower) {
+      val = lower;
+    }
+    else if (val > upper) {
+      val = upper;
+    }
+  }
+}
+
+void increm_bias(vector<double> &bias, vector<double> dif) {
+  for (unsigned i = 0; i < bias.size(); i++) {
+    bias[i] = 0.2*bias[i]+0.4*(dif[i]+bias[i]);
+  }
+}
+
+void decrement_bias(vector<double> &bias, vector<double> dif) {
+  for (unsigned i = 0; i < bias.size(); i++) {
+    bias[i] = bias[i]-0.4*(dif[i]+bias[i]);
+  }
+}
+
+/**
+ * Aplica el Solis Wets
+ *
+ * @param  sol solucion a mejorar.
+ * @param fitness fitness de la solución.
+ */
+template <class Random>
+void soliswets(vector<double> &sol, double &fitness, double delta, int maxevals, int lower, int upper, Random &random, int &eval_actual, int max_global) {
+  const size_t dim = sol.size();
+  vector<double> bias (dim), dif (dim), newsol (dim);
+  double newfit;
+  size_t i;
+
+  int evals = 0;
+  int num_success = 0;
+  int num_failed = 0;
+
+  while (evals < maxevals && eval_actual < max_global) {
+    std::uniform_real_distribution<double> distribution(0.0, delta);
+
+    for (i = 0; i < dim; i++) {
+      dif[i] = distribution(random);
+      newsol[i] = sol[i] + dif[i] + bias[i];
+    }
+
+    clip(newsol, lower, upper);
+    newfit = cec17_fitness(&newsol[0]);
+    evals += 1;
+    ++eval_actual;
+
+    if (newfit < fitness) {
+      sol = newsol;
+      fitness = newfit;
+      increm_bias(bias, dif);
+      num_success += 1;
+      num_failed = 0;
+    }
+    else if (evals < maxevals && eval_actual < max_global) {
+
+      for (i = 0; i < dim; i++) {
+        newsol[i] = sol[i] - dif[i] - bias[i];
+      }
+
+      clip(newsol, lower, upper);
+      newfit = cec17_fitness(&newsol[0]);
+      evals += 1;
+      ++eval_actual;
+
+      if (newfit < fitness) {
+        sol = newsol;
+        fitness = newfit;
+        decrement_bias(bias, dif);
+        num_success += 1;
+        num_failed = 0;
+      }
+      else {
+        for (i = 0; i < dim; i++) {
+          bias[i] /= 2;
+        }
+
+        num_success = 0;
+        num_failed += 1;
+      }
+    }
+
+    if (num_success >= 5) {
+      num_success = 0;
+      delta *= 2;
+    }
+    else if (num_failed >= 3) {
+      num_failed = 0;
+      delta /= 2;
+    }
+  }
+
+}
+//-----------------------------------------------------------------------
+
 //hace una explotación suave
 vector<pair<double, vector<double>>> explotacion(vector<pair<double, vector<double>>> cells, int dim, int &eval, int max_eval){
 	vector<pair<double,vector<double>>> new_cells=cells;
@@ -434,7 +536,8 @@ double Cells(vector<vector<double>> celulas, int dim, int max_eval, int seed){
 	return best_f;
 }
 
-double CellsWithBL(vector<vector<double>> celulas, int dim, int max_eval, int seed){
+//hibridación entre el algoritmo de las celulas y Solis-Wet
+double CellsWithSW(vector<vector<double>> celulas, int dim, int max_eval, int seed){
 	
 	double best_f=-1, f=-1;
 	vector<double> queen_cell;
@@ -450,6 +553,8 @@ double CellsWithBL(vector<vector<double>> celulas, int dim, int max_eval, int se
 
 	vector<int> indice(dim);
 
+	mt19937 gen(seed);
+
 	for(int i=0; i < dim; ++i)
 		indice[i]=i;
 	
@@ -463,10 +568,6 @@ double CellsWithBL(vector<vector<double>> celulas, int dim, int max_eval, int se
 
 	while(eval < max_eval){
 
-		//aplicamos la explotación
-		cells1 = bl(cells1, dim, eval, max_eval);
-		cells2 = bl(cells2, dim, eval, max_eval);
-
 		//calculamos el tamaño maximo de los 2 grupos para ahorrar iteraciones inecesarias
 		max_size=cells1.size();
 		if(cells2.size() > max_size)
@@ -477,6 +578,9 @@ double CellsWithBL(vector<vector<double>> celulas, int dim, int max_eval, int se
 
 			//para el grupo 1 de celulas
 			if(i < cells1.size()){
+				//aplicamos la explotación
+				soliswets(cells1[i].second, cells1[i].first, 0.2, dim*10, -100, 100, gen, eval, max_eval);
+
 				if(cells1[i].first < best_f || best_f==-1){
 					best_f = cells1[i].first;
 					queen_cell = cells1[i].second;
@@ -485,6 +589,8 @@ double CellsWithBL(vector<vector<double>> celulas, int dim, int max_eval, int se
 			}
 			//para el grupo 2 de celulas
 			if(i < cells2.size()){
+				//aplicamos la explotacíón
+				soliswets(cells2[i].second, cells2[i].first, 0.2, dim*10, -100, 100, gen, eval, max_eval);
 				if(cells2[i].first < best_f || best_f==-1){
 					best_f = cells2[i].first;
 					queen_cell = cells2[i].second;
@@ -546,83 +652,102 @@ double CellsWithBL(vector<vector<double>> celulas, int dim, int max_eval, int se
 }
 
 
-int main() {
+int main(int argc, char** argv) {
 
-	//int dim = 10;
-	vector<int> seed(10);
-	seed.push_back(42);
-	seed.push_back(5);
-	seed.push_back(100);
-	seed.push_back(-1);
-	seed.push_back(50);
-	seed.push_back(1995);
-	seed.push_back(19);
-	seed.push_back(21);
-	seed.push_back(80);
-	seed.push_back(7);
-	
-	double fitness;
-	double fitness_best=-1;
+	if(argc>1){
 
-	vector<vector<double>> solutions;
+		string alg = argv[1];
 
-	double f=0;
+		if(alg == "cells" or alg == "cellsSW"){
 
-	clock_t end_part;
-	float elapsed_part;
-	clock_t start_part;
+			//int dim = 10;
+			vector<int> seed(10);
+			seed.push_back(42);
+			seed.push_back(5);
+			seed.push_back(100);
+			seed.push_back(-1);
+			seed.push_back(50);
+			seed.push_back(1995);
+			seed.push_back(19);
+			seed.push_back(21);
+			seed.push_back(80);
+			seed.push_back(7);
+			
+			double fitness;
+			double fitness_best=-1;
 
-	clock_t start = clock();
-	//recorre las dimensiones 10 30 50
-	for(int dim=10; dim <=50; dim+=20){
+			vector<vector<double>> solutions;
 
-		vector<double> sol(dim);
-		vector<double> best(dim);
+			double f=0;
 
-		start_part = clock();
-		//recorre cada problema
-		for(int j=0; j < 30; ++j){
+			clock_t end_part;
+			float elapsed_part;
+			clock_t start_part;
 
-			//repite el problema 10 veces
-			for(int k=0; k<10; ++k){
+			if(alg == "cells")
+				cout << "USANDO EL ALGORITMO CELLS" << endl;
+			else
+				cout << "USANDO EL ALGORITMO CELLS CON SOLIS-WET" << endl;
 
-				uniform_real_distribution<> dis(-100.0, 100.0);
+			clock_t start = clock();
+			//recorre las dimensiones 10 30 50
+			for(int dim=10; dim <=50; dim+=20){
 
-				mt19937 gen(seed[k]);
+				vector<double> sol(dim);
+				vector<double> best(dim);
 
-				cec17_init("cells", j+1, dim);
+				start_part = clock();
+				//recorre cada problema
+				for(int j=0; j < 30; ++j){
 
-				for(int e = 0; e < 10; ++e){
-					for(int i=0; i < dim; ++i){
-						sol[i] = dis(gen);
+					//repite el problema 10 veces
+					for(int k=0; k<10; ++k){
 
+						uniform_real_distribution<> dis(-100.0, 100.0);
+
+						mt19937 gen(seed[k]);
+
+						cec17_init(alg.c_str(), j+1, dim);
+
+						for(int e = 0; e < 10; ++e){
+							for(int i=0; i < dim; ++i){
+								sol[i] = dis(gen);
+
+							}
+							solutions.push_back(sol);
+
+							
+						}
+						if(alg == "cells")
+							f += Cells(solutions, dim, 10000*dim, seed[k]);
+						else
+							f += CellsWithSW(solutions, dim, 10000*dim, seed[k]);
+
+						for(unsigned int i =0; i < solutions.size(); ++i)
+							solutions[i].clear();
+
+						solutions.clear();
 					}
-					solutions.push_back(sol);
-
-					
+					f = f/10;
+					cout << "Media Best cell[" << j+1 << "] con dimension (" << dim << "): " << scientific << cec17_error(f) << endl;
+					f =0;
 				}
+				end_part = clock();
+				elapsed_part = float(end_part - start_part)/CLOCKS_PER_SEC;
 
-				f += Cells(solutions, dim, 10000*dim, seed[k]);//10000*dim
+				cout << "Elapse con dimensión (" << dim << "): " << (elapsed_part/60.0) << " (minutos)" << endl;
 
-				for(unsigned int i =0; i < solutions.size(); ++i)
-					solutions[i].clear();
-
-				solutions.clear();
 			}
-			f = f/10;
-			cout << "Media Best cell[" << j+1 << "] con dimension (" << dim << "): " << scientific << cec17_error(f) << endl;
-			f =0;
+			clock_t end = clock();
+			float elapsed = float(end - start)/CLOCKS_PER_SEC;
+
+			cout << "En total tarda: " << (elapsed/60.0) << " (minutos)" << endl;
+		}else{
+			cout << "Error solo usa los algoritmos (cells o cellsSW), escriba bien los algoritomos" << endl;
 		}
-		end_part = clock();
-		elapsed_part = float(end_part - start_part)/CLOCKS_PER_SEC;
-
-		cout << "Elapse con dimensión (" << dim << "): " << (elapsed_part/60.0) << " (minutos)" << endl;
-
+	}else{
+		cout << "Error necesita especificar el nombre del algotitmo ./cells <cells o cellsSW>" << endl;
 	}
-	clock_t end = clock();
-	float elapsed = float(end - start)/CLOCKS_PER_SEC;
-
-	cout << "En total tarda: " << (elapsed/60.0) << " (minutos)" << endl;
 
 	return 0;
 }
