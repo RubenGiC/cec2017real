@@ -17,8 +17,6 @@
 
 extern "C"{
 	#include "cec17.h"
-	#include "cec17.c"
-	#include "cec17_test_func.c"
 }
 
 using namespace std;
@@ -132,8 +130,88 @@ vector<pair<double, vector<double>>> explotacion(vector<pair<double, vector<doub
 	int max_nodo=2, n_nodo=0, cell=0, nodo=0;
 	double val, fitness;
 
+	//mientras no supere el numero máximo de evaluaciones (2*cells.size()*dim)
+	for(int i=0; i<(2*dim*cells.size()) && eval < max_eval; ++i){
+
+		
+		//calculo el nuevo valor del nodo de esa celula
+		val = new_cells[cell].second[nodo] * (rand() % 10 + 2);
+
+		//lo modularizo entre -100 y 100
+		if(val < 0){
+			val = (-1)*fmod(abs(val),100.000000001);
+		}else{
+			val = fmod(val,100.000000001);
+		}
+
+		//y si el valor aleatorio es > a 5 cambia de signo el valor
+		if((rand() % 10 + 1) > 5)
+			val = val *(-1);
+
+		//reemplazamos el valor
+		new_cells[cell].second[nodo] = val;	
+
+		//calculamos su fitness
+		fitness = cec17_fitness(&new_cells[cell].second[0]);
+		++eval;
+
+		//cout << fitness << endl;
+
+		//si es mejor que la que tiene actualmente actualiza
+		if(fitness < actual_cells[cell].first){
+
+			actual_cells[cell].first = fitness;
+			actual_cells[cell].second[nodo] = new_cells[cell].second[nodo];
+			new_cells[cell].first = fitness;
+
+			//pasamos al siguiente nodo o nodo de la siguiente celula si hemos
+			//recorrido todos los nodos de esa celula
+			++nodo;
+			n_nodo = 0;
+
+			//si hemos recorrido todos los nodos de esa celula pasamos a la siguiente celula
+			if(nodo >= dim){
+				nodo = 0;
+				++cell;
+				//si hemos recorrido todas las celulas hace otra pasada 
+				if(cell >= cells.size())
+					cell = 0;
+			}
+		}else{
+			//restauramos el valor
+			new_cells[cell].second[nodo] = actual_cells[cell].second[nodo];
+
+			++n_nodo;
+			//si supera el numero maximo de cambios de cada nodo
+			if(n_nodo>=max_nodo){
+				//pasamos al siguiente nodo o nodo de la siguiente celula si hemos
+				//recorrido todos los nodos de esa celula
+				++nodo;
+				n_nodo = 0;
+
+				//si hemos recorrido todos los nodos de esa celula pasamos a la siguiente celula
+				if(nodo >= dim){
+					nodo = 0;
+					++cell;
+					//si hemos recorrido todas las celulas hace otra pasada 
+					if(cell >= cells.size())
+						cell = 0;
+				}
+			}
+		}
+	}
+
+	return actual_cells;
+}
+
+vector<pair<double, vector<double>>> explotacionMejorado(vector<pair<double, vector<double>>> cells, int dim, int &eval, int max_eval){
+	vector<pair<double,vector<double>>> new_cells=cells;
+	vector<pair<double,vector<double>>> actual_cells=cells;
+	int max_nodo=2, n_nodo=0, cell=0, nodo=0;
+	double val, fitness;
+
 	//mientras no supere el numero máximo de evaluaciones
-	for(int i=0; i<(2*cells.size()*dim) && eval < max_eval; ++i){
+	for(int i=0; i<(1000*dim) && eval < max_eval; ++i){
 
 		
 		//calculo el nuevo valor del nodo de esa celula
@@ -484,7 +562,119 @@ double Cells(vector<vector<double>> celulas, int dim, int max_eval, int seed){
 			}
 		}
 		//Propagación o reproducción
-		//cells1 = Meiosis(cells1, eval, max_eval, indice, dim, decrece2, constant_meiosis);
+		//cells1 = Meiosis(cells1, eval, max_eval, indice, dim, decrece2, constant_meiosis, seed);
+		cells1 = Mitosis(cells1, eval, max_eval, indice, dim, decrece, seed);
+		cells2 = Meiosis(cells2, eval, max_eval, indice, dim, decrece2, constant_meiosis, seed);
+
+		//controlo que la constante este entre 4 y 2
+		if(decrece2==0){
+			--constant_meiosis;
+		}else{
+			++constant_meiosis;
+		}
+
+		//controlo que los rangos en la Meiosis este entre [5 y 120]
+		if(constant_meiosis == 1){
+			decrece2 = 1;
+			++constant_meiosis;
+		}
+		else if(constant_meiosis == 5){
+			decrece2 = 0;
+			--constant_meiosis;
+		}
+
+		//controlo que los rangos en la Mitosis este entre [10 y 160]
+		if(cells1.size() >= 160)
+			decrece = 1;
+		else if(cells1.size() <= 10)
+			decrece = 0;
+
+		//guardamos el que tenga mejor fitness
+		for(unsigned int i=0; i<max_size; ++i){
+
+			if(i < cells1.size()){
+				if(cells1[i].first < best_f || best_f==-1){
+					best_f = cells1[i].first;
+					queen_cell = cells1[i].second;
+					grupo = 1;
+				}
+			}
+
+			if(i < cells2.size()){
+				if(cells2[i].first < best_f || best_f==-1){
+					best_f = cells2[i].first;
+					queen_cell = cells2[i].second;
+					grupo = 2;
+				}
+			}
+		}
+
+	}
+
+	return best_f;
+}
+
+//mejora de celulas
+double CellsMejorado(vector<vector<double>> celulas, int dim, int max_eval, int seed){
+	
+	double best_f=-1, f=-1;
+	vector<double> queen_cell;
+	vector<pair<double,vector<double>>> cells1;
+	vector<pair<double,vector<double>>> cells2;
+
+	int eval=0, grupo = -1;
+
+	int max_size = 0;
+
+	int decrece = 0, decrece2 = 0;
+	int constant_meiosis = 4;
+
+	vector<int> indice(dim);
+
+	for(int i=0; i < dim; ++i)
+		indice[i]=i;
+	
+	//creamos los 2 grupos de celulas
+	for(unsigned int i=0; i < celulas.size(); i+=2){
+
+		cells1.push_back(pair<double,vector<double>>(cec17_fitness(&celulas[i][0]),celulas[i]));
+		cells2.push_back(pair<double,vector<double>>(cec17_fitness(&celulas[i][0]),celulas[i+1]));
+		eval +=2;
+	}
+
+	while(eval < max_eval){
+
+		//aplicamos la explotación
+		cells1 = explotacionMejorado(cells1, dim, eval, max_eval);
+		cells2 = explotacionMejorado(cells2, dim, eval, max_eval);
+
+		//calculamos el tamaño maximo de los 2 grupos para ahorrar iteraciones inecesarias
+		max_size=cells1.size();
+		if(cells2.size() > max_size)
+			max_size=cells2.size();
+
+		//guardamos el que tenga mejor fitness
+		for(unsigned int i=0; i<max_size; ++i){
+
+			//para el grupo 1 de celulas
+			if(i < cells1.size()){
+				if(cells1[i].first < best_f || best_f==-1){
+					best_f = cells1[i].first;
+					queen_cell = cells1[i].second;
+					grupo = 1;
+				}
+			}
+			//para el grupo 2 de celulas
+			if(i < cells2.size()){
+				if(cells2[i].first < best_f || best_f==-1){
+					best_f = cells2[i].first;
+					queen_cell = cells2[i].second;
+					grupo = 2;
+				}
+			}
+		}
+		//Propagación o reproducción
+		//cells1 = Meiosis(cells1, eval, max_eval, indice, dim, decrece2, constant_meiosis, seed);
 		cells1 = Mitosis(cells1, eval, max_eval, indice, dim, decrece, seed);
 		cells2 = Meiosis(cells2, eval, max_eval, indice, dim, decrece2, constant_meiosis, seed);
 
@@ -549,7 +739,7 @@ double CellsWithSW(vector<vector<double>> celulas, int dim, int max_eval, int se
 	int max_size = 0;
 
 	int decrece = 0, decrece2 = 0;
-	int constant_meiosis = 4;
+	int constant_meiosis = 4, maxtimes=5;
 
 	vector<int> indice(dim);
 
@@ -579,7 +769,7 @@ double CellsWithSW(vector<vector<double>> celulas, int dim, int max_eval, int se
 			//para el grupo 1 de celulas
 			if(i < cells1.size()){
 				//aplicamos la explotación
-				soliswets(cells1[i].second, cells1[i].first, 0.2, dim*10, -100, 100, gen, eval, max_eval);
+				soliswets(cells1[i].second, cells1[i].first, 0.2, 100000/maxtimes-1, -100, 100, gen, eval, max_eval);
 
 				if(cells1[i].first < best_f || best_f==-1){
 					best_f = cells1[i].first;
@@ -590,7 +780,7 @@ double CellsWithSW(vector<vector<double>> celulas, int dim, int max_eval, int se
 			//para el grupo 2 de celulas
 			if(i < cells2.size()){
 				//aplicamos la explotacíón
-				soliswets(cells2[i].second, cells2[i].first, 0.2, dim*10, -100, 100, gen, eval, max_eval);
+				soliswets(cells2[i].second, cells2[i].first, 0.2, 100000/maxtimes-1, -100, 100, gen, eval, max_eval);
 				if(cells2[i].first < best_f || best_f==-1){
 					best_f = cells2[i].first;
 					queen_cell = cells2[i].second;
@@ -658,7 +848,7 @@ int main(int argc, char** argv) {
 
 		string alg = argv[1];
 
-		if(alg == "cells" or alg == "cellsSW"){
+		if(alg == "cells" or alg == "cellsSW" or alg == "cellsMejorado"){
 
 			//int dim = 10;
 			vector<int> seed(10);
@@ -686,6 +876,8 @@ int main(int argc, char** argv) {
 
 			if(alg == "cells")
 				cout << "USANDO EL ALGORITMO CELLS" << endl;
+			else if (alg == "cellsMejorado")
+				cout << "USANDO EL ALGORITMO CELLS MEJORADO" << endl;
 			else
 				cout << "USANDO EL ALGORITMO CELLS CON SOLIS-WET" << endl;
 
@@ -720,6 +912,8 @@ int main(int argc, char** argv) {
 						}
 						if(alg == "cells")
 							f += Cells(solutions, dim, 10000*dim, seed[k]);
+						else if(alg == "cellsMejorado")
+							f += CellsMejorado(solutions, dim, 10000*dim, seed[k]);
 						else
 							f += CellsWithSW(solutions, dim, 10000*dim, seed[k]);
 
@@ -743,10 +937,10 @@ int main(int argc, char** argv) {
 
 			cout << "En total tarda: " << (elapsed/60.0) << " (minutos)" << endl;
 		}else{
-			cout << "Error solo usa los algoritmos (cells o cellsSW), escriba bien los algoritomos" << endl;
+			cout << "Error solo usa los algoritmos (cells, cellsSW o cellsMejorado), escriba bien los algoritomos" << endl;
 		}
 	}else{
-		cout << "Error necesita especificar el nombre del algotitmo ./cells <cells o cellsSW>" << endl;
+		cout << "Error necesita especificar el nombre del algotitmo ./cells <cells, cellsSW o cellsMejorado>" << endl;
 	}
 
 	return 0;
