@@ -204,6 +204,7 @@ vector<pair<double, vector<double>>> explotacion(vector<pair<double, vector<doub
 	return actual_cells;
 }
 
+//en la mejora solo he cambiado el numero de evaluaciones a evaluar el resto es igual
 vector<pair<double, vector<double>>> explotacionMejorado(vector<pair<double, vector<double>>> cells, int dim, int &eval, int max_eval){
 	vector<pair<double,vector<double>>> new_cells=cells;
 	vector<pair<double,vector<double>>> actual_cells=cells;
@@ -615,6 +616,7 @@ double Cells(vector<vector<double>> celulas, int dim, int max_eval, int seed){
 }
 
 //mejora de celulas
+//en la mejora solo he cambiado el numero de evaluaciones a evaluar en la explotación el resto es igual
 double CellsMejorado(vector<vector<double>> celulas, int dim, int max_eval, int seed){
 	
 	double best_f=-1, f=-1;
