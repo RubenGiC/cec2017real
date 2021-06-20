@@ -1,1 +1,0 @@
-solo he cambiado la forma de explorar, en vez de esa formula cambia el valor aleatoriamente.
