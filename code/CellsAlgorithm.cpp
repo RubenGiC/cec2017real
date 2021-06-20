@@ -130,8 +130,8 @@ vector<pair<double, vector<double>>> explotacion(vector<pair<double, vector<doub
 	int max_nodo=2, n_nodo=0, cell=0, nodo=0;
 	double val, fitness;
 
-	//mientras no supere el numero máximo de evaluaciones (2*cells.size()*dim)
-	for(int i=0; i<(2*dim*cells.size()) && eval < max_eval; ++i){
+	//mientras no supere el numero máximo de evaluaciones
+	for(int i=0; i<(1000*dim) && eval < max_eval; ++i){
 
 		
 		//calculo el nuevo valor del nodo de esa celula
@@ -205,32 +205,21 @@ vector<pair<double, vector<double>>> explotacion(vector<pair<double, vector<doub
 }
 
 //en la mejora solo he cambiado el numero de evaluaciones a evaluar el resto es igual
-vector<pair<double, vector<double>>> explotacionMejorado(vector<pair<double, vector<double>>> cells, int dim, int &eval, int max_eval){
+vector<pair<double, vector<double>>> explotacionMejorado(vector<pair<double, vector<double>>> cells, int dim, int &eval, int max_eval, int seed){
 	vector<pair<double,vector<double>>> new_cells=cells;
 	vector<pair<double,vector<double>>> actual_cells=cells;
 	int max_nodo=2, n_nodo=0, cell=0, nodo=0;
 	double val, fitness;
 
+	uniform_real_distribution<> dis(-100.0, 100.0);
+
+	mt19937 gen(seed);
+
 	//mientras no supere el numero máximo de evaluaciones
 	for(int i=0; i<(1000*dim) && eval < max_eval; ++i){
 
-		
-		//calculo el nuevo valor del nodo de esa celula
-		val = new_cells[cell].second[nodo] * (rand() % 10 + 2);
-
-		//lo modularizo entre -100 y 100
-		if(val < 0){
-			val = (-1)*fmod(abs(val),100.000000001);
-		}else{
-			val = fmod(val,100.000000001);
-		}
-
-		//y si el valor aleatorio es > a 5 cambia de signo el valor
-		if((rand() % 10 + 1) > 5)
-			val = val *(-1);
-
-		//reemplazamos el valor
-		new_cells[cell].second[nodo] = val;	
+		//reemplazamos el valor por un valor aleatorio entre [-100, 100]
+		new_cells[cell].second[nodo] = dis(gen);	
 
 		//calculamos su fitness
 		fitness = cec17_fitness(&new_cells[cell].second[0]);
@@ -622,14 +611,8 @@ double CellsMejorado(vector<vector<double>> celulas, int dim, int max_eval, int 
 	double best_f=-1, f=-1;
 	vector<double> queen_cell;
 	vector<pair<double,vector<double>>> cells1;
-	vector<pair<double,vector<double>>> cells2;
 
-	int eval=0, grupo = -1;
-
-	int max_size = 0;
-
-	int decrece = 0, decrece2 = 0;
-	int constant_meiosis = 4;
+	int eval=0, decrece = 0, constant_meiosis = 4;
 
 	vector<int> indice(dim);
 
@@ -637,51 +620,33 @@ double CellsMejorado(vector<vector<double>> celulas, int dim, int max_eval, int 
 		indice[i]=i;
 	
 	//creamos los 2 grupos de celulas
-	for(unsigned int i=0; i < celulas.size(); i+=2){
+	for(unsigned int i=0; i < celulas.size(); ++i){
 
 		cells1.push_back(pair<double,vector<double>>(cec17_fitness(&celulas[i][0]),celulas[i]));
-		cells2.push_back(pair<double,vector<double>>(cec17_fitness(&celulas[i][0]),celulas[i+1]));
-		eval +=2;
+		++eval;
 	}
 
 	while(eval < max_eval){
 
 		//aplicamos la explotación
-		cells1 = explotacionMejorado(cells1, dim, eval, max_eval);
-		cells2 = explotacionMejorado(cells2, dim, eval, max_eval);
-
-		//calculamos el tamaño maximo de los 2 grupos para ahorrar iteraciones inecesarias
-		max_size=cells1.size();
-		if(cells2.size() > max_size)
-			max_size=cells2.size();
+		cells1 = explotacionMejorado(cells1, dim, eval, max_eval, seed);
 
 		//guardamos el que tenga mejor fitness
-		for(unsigned int i=0; i<max_size; ++i){
+		for(unsigned int i=0; i<cells1.size(); ++i){
 
 			//para el grupo 1 de celulas
 			if(i < cells1.size()){
 				if(cells1[i].first < best_f || best_f==-1){
 					best_f = cells1[i].first;
 					queen_cell = cells1[i].second;
-					grupo = 1;
-				}
-			}
-			//para el grupo 2 de celulas
-			if(i < cells2.size()){
-				if(cells2[i].first < best_f || best_f==-1){
-					best_f = cells2[i].first;
-					queen_cell = cells2[i].second;
-					grupo = 2;
 				}
 			}
 		}
 		//Propagación o reproducción
-		//cells1 = Meiosis(cells1, eval, max_eval, indice, dim, decrece2, constant_meiosis, seed);
-		cells1 = Mitosis(cells1, eval, max_eval, indice, dim, decrece, seed);
-		cells2 = Meiosis(cells2, eval, max_eval, indice, dim, decrece2, constant_meiosis, seed);
+		cells1 = Meiosis(cells1, eval, max_eval, indice, dim, decrece, constant_meiosis, seed);
 
 		//controlo que la constante este entre 4 y 2
-		if(decrece2==0){
+		if(decrece==0){
 			--constant_meiosis;
 		}else{
 			++constant_meiosis;
@@ -689,19 +654,13 @@ double CellsMejorado(vector<vector<double>> celulas, int dim, int max_eval, int 
 
 		//controlo que los rangos en la Meiosis este entre [5 y 120]
 		if(constant_meiosis == 1){
-			decrece2 = 1;
+			decrece = 1;
 			++constant_meiosis;
 		}
 		else if(constant_meiosis == 5){
-			decrece2 = 0;
+			decrece = 0;
 			--constant_meiosis;
 		}
-
-		//controlo que los rangos en la Mitosis este entre [10 y 160]
-		if(cells1.size() >= 160)
-			decrece = 1;
-		else if(cells1.size() <= 10)
-			decrece = 0;
 
 		//guardamos el que tenga mejor fitness
 		for(unsigned int i=0; i<max_size; ++i){
@@ -710,15 +669,6 @@ double CellsMejorado(vector<vector<double>> celulas, int dim, int max_eval, int 
 				if(cells1[i].first < best_f || best_f==-1){
 					best_f = cells1[i].first;
 					queen_cell = cells1[i].second;
-					grupo = 1;
-				}
-			}
-
-			if(i < cells2.size()){
-				if(cells2[i].first < best_f || best_f==-1){
-					best_f = cells2[i].first;
-					queen_cell = cells2[i].second;
-					grupo = 2;
 				}
 			}
 		}
